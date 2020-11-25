@@ -51,7 +51,7 @@ dependencies {
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'com.android.support.test:runner:1.0.2'
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
-    implementation files('lib/CtCtms.jar')
+    implementation files('lib/CtCtms_1.3.6.jar')
     implementation files('lib/CTOS.CtSystem_0.0.15.jar')
     compileOnly files("${SDK_DIR}/platforms/android-21/data/layoutlib.jar")
 }

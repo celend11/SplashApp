@@ -13,12 +13,16 @@ import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Message;
+import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
@@ -40,8 +44,13 @@ import java.util.concurrent.TimeUnit;
 
 import CTOS.CtCtms;
 import CTOS.CtSystem;
+import castles.ctms.module.commonbusiness.DownloadInfo;
+import castles.ctms.module.commonbusiness.IAgentCallback;
+import castles.ctms.module.commonbusiness.IStatusCallback;
+import splashapp.android.nttd.cas.com.new_splash_app.Util.FileUtil;
 import splashapp.android.nttd.cas.com.new_splash_app.Util.JsonFileUtil;
 import splashapp.android.nttd.cas.com.new_splash_app.Util.SystemUtil;
+import splashapp.android.nttd.cas.com.new_splash_app.constants.CommonConst;
 import splashapp.android.nttd.cas.com.new_splash_app.constants.SystemDefine;
 import splashapp.android.nttd.cas.com.new_splash_app.view.DialogView;
 
@@ -49,18 +58,52 @@ import splashapp.android.nttd.cas.com.new_splash_app.view.DialogView;
 /**
  * @author Administrator
  */
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements IStatusCallback{
     private static final String TAG = MainActivity.class.getSimpleName();
-    private static String VENDOR_ACTION = "jp.co.nttdata.dlc.agent.broadcast.vendor";
     public static long timeout = 30 * 60 * 1000;
-    //    public static long timeout=5*1000;
-    private static final String VERSION_NAME = "1.2.0";
 
     private DialogView dialogView;
     private ImageButton imageButton;
     private TextView tvVersionName;
-
+    private CtCtms ctCtms;
     private String agentPackageName = "package:jp.co.nttdata.dlc.agent";
+
+    private int type = 0;
+    private String updateName = "";
+    private boolean isNoInstall = true;
+    private boolean isShowNavBarView = false;
+
+    private String GetUpdateTypeName(int type){
+        String updateName = "";
+        switch (type){
+            case CommonConst.FileType.FILE_TYPE_SMF:
+                updateName = "Updating(SMF)....";
+                break;
+            case CommonConst.FileType.FILE_TYPE_APK:
+                updateName = "Updating(Application)....";
+                break;
+            case CommonConst.FileType.FILE_TYPE_OTA:
+                updateName = "Updating(OS)....";
+                break;
+            case CommonConst.FileType.FILE_STYPE_EMV:
+            case CommonConst.FileType.FILE_STYPE_EMVCL:
+            case  CommonConst.FileType.FILE_TYPE_AME:
+            case CommonConst.FileType.FILE_TYPE_CMF:
+            case CommonConst.FileType.FILE_TYPE_FREE:
+            case CommonConst.FileType.FILE_TYPE_LYX:
+            case CommonConst.FileType.FILE_TYPE_PRM:
+            case CommonConst.FileType.FILE_TYPE_SBL:
+            case CommonConst.FileType.FILE_TYPE_SME:
+            case CommonConst.FileType.FILE_TYPE_UPDATELIST:
+                updateName = "Updating(Patch)....";
+                break;
+            default:
+                updateName = "";
+                break;
+        }
+        return updateName;
+    }
+
     private BroadcastReceiver packageReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -80,25 +123,7 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    private BroadcastReceiver vendorInitBroadcast = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            switch (getResultCode()) {
-                case 1:
-                    Log.d(TAG, "vendor service execute success callback");
-                    handler.sendEmptyMessage(2);
-                    handler.sendEmptyMessage(3);
-                    break;
-                default:
-                    Log.d(TAG, "vendor service error callback");
-                    handler.sendEmptyMessage(3);
-                    break;
-            }
-        }
-    };
 
-    private String VENDOR_MODEL_KEY = "vendor_model_key";
-    private int VENDOR_MODEL_INIT = 1;
     @SuppressLint("HandlerLeak")
     private Handler handler = new Handler() {
         @Override
@@ -114,31 +139,19 @@ public class MainActivity extends AppCompatActivity {
                     dialogView.stopTiming();
                     break;
                 case 3:
-                    String currentVersionName = MainActivity.getCurrentVersionName(MainActivity.this);
-                    Log.d(TAG, "currentVersionName: " + currentVersionName);
-                    //call service
-                    if (currentVersionName.compareTo(VERSION_NAME) >= 0) {
-                        Intent intent = new Intent();
-                        intent.setClassName("zz.castles.zzservice", "zz.castles.zzservice.MyService");
-                        startService(intent);
-                    }
-                    try {
-                        Thread.sleep(300);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                    //timeout/vendor callback
+//                    System.exit(0);
                     skipToLaunch();
                     break;
+                case 4:
+                    if(isNoInstall){
+                        handler.sendEmptyMessage(3);
+                    }
+                    break;
                 case 5:
-                    //start initvendor
-                    Intent intentInitVendor = new Intent();
-                    intentInitVendor.setClassName("jp.co.nttdata.dlc.agent", "jp.co.nttdata.dlc.agent.VendorService");
-                    intentInitVendor.setAction("jp.co.nttdata.dlc.agent.vendor.init");
-                    intentInitVendor.putExtra(VENDOR_MODEL_KEY, VENDOR_MODEL_INIT);
-                    PendingIntent piInitVendor = PendingIntent.getBroadcast(MainActivity.this, 0, new Intent(VENDOR_ACTION), PendingIntent.FLAG_CANCEL_CURRENT);
-                    intentInitVendor.putExtra("vendor_init_callback", piInitVendor);
-                    startService(intentInitVendor);
+                    //start callback
+                    if(ctCtms!=null){
+                        ctCtms.registerCallback(MainActivity.this);
+                    }
                     break;
                 case 6:
                     //timeout
@@ -151,14 +164,9 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                     break;
-                case 7:
-                    Intent ctCtmsIntent = new Intent();
-                    ctCtmsIntent.setClassName("android.ctms_service", "android.ctms_service.CTMS_Service");
-                    startService(ctCtmsIntent);
-                    break;
                 case 8:
-                    if (isAviliblePackageName(MainActivity.this, "jp.co.nttdata.dlc.agent")) {
-                        handler.sendEmptyMessage(5);
+                    if (isAviliblePackageName(MainActivity.this, CommonConst.CTMS_AGENT_PACKAGE_NAME)) {
+                        handler.sendEmptyMessageDelayed(5,2000);
                     } else {
 //                        Toast.makeText(MainActivity.this,"jp.co.nttdata.dlc.agent is not avilible.",Toast.LENGTH_LONG).show();
                         handler.sendEmptyMessage(3);
@@ -198,13 +206,13 @@ public class MainActivity extends AppCompatActivity {
         imageButton = findViewById(R.id.imageButton);
         imageButton.setBackground(null);
         tvVersionName = findViewById(R.id.tv_versionName);
-        registerReceiver(vendorInitBroadcast, new IntentFilter(VENDOR_ACTION));
+        ctCtms = ((MyApp)getApplication()).getCtCtms();
+        initNavBarView();
         if(strDeivceModel.equals(SystemDefine.d_MODEL_S1E)){
             handler.sendEmptyMessage(11);
         }
         handler.sendEmptyMessage(9);
         handler.sendEmptyMessage(1);
-        handler.sendEmptyMessage(7);
         handler.sendEmptyMessageDelayed(6, timeout);
         handler.sendEmptyMessage(10);
         imageButton.setOnClickListener(v -> {
@@ -218,31 +226,17 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        ExecutorService singleThreadPool = new ThreadPoolExecutor(1, 1,
-                0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(1024), new ThreadPoolExecutor.AbortPolicy());
-        singleThreadPool.execute(() -> {
-            try {
-                Thread.sleep(3000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            Log.e(TAG, "singleThreadPool_start");
-            int status = 1;
-            long intervalTime = 1000;
-            CtCtms ctCtms = new CtCtms();
-            do {
-                try {
-                    Thread.sleep(intervalTime);
-                    status = ctCtms.getBootInstatllStatus();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    break;
-                }
-            } while (status != 0);
-            handler.sendEmptyMessage(8);
-        });
-        singleThreadPool.shutdown();
+        handler.sendEmptyMessage(8);
+
+    }
+
+    //get the navbar status send broadcast to hide navbar
+    public void initNavBarView(){
+        isShowNavBarView = getNavBarView();
+        Log.d(TAG,"isShowNavBarView == " + isShowNavBarView);
+        Intent intent = new Intent();
+        intent.setAction(CommonConst.SATRUN_REMOVE_NAVIGATION_BAR);
+        sendBroadcast(intent);
     }
 
     public void registerPackageReceiver() {
@@ -321,8 +315,11 @@ public class MainActivity extends AppCompatActivity {
 //        startActivity(skip);
 //        System.exit(0);
         //                android.os.Process.killProcess(android.os.Process.myPid());
-
-
+        if(isShowNavBarView){    //if show navbar is true send broadcast to show
+            Intent navbarIntent = new Intent();
+            navbarIntent.setAction(CommonConst.SATRUN_SHOW_NAVIGATION_BAR);
+            sendBroadcast(navbarIntent);
+        }
         try {
             PackageManager packageManager = getPackageManager();
             Intent intent = packageManager.getLaunchIntentForPackage(searchDefauleHome(MainActivity.this));
@@ -381,10 +378,17 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if(isShowNavBarView){
+            Intent navbarIntent = new Intent();
+            navbarIntent.setAction(CommonConst.SATRUN_SHOW_NAVIGATION_BAR);
+            sendBroadcast(navbarIntent);
+        }
         Log.e(TAG, "onDestroy");
-        unregisterReceiver(vendorInitBroadcast);
         if (packageReceiver != null) {
             unregisterReceiver(packageReceiver);
+        }
+        if(ctCtms!=null){
+            ctCtms.unregisterCallback(this);
         }
     }
 
@@ -438,5 +442,85 @@ public class MainActivity extends AppCompatActivity {
             return "";
         }
         return pinfoSplash.versionName;
+    }
+
+    public boolean getNavBarView() {
+        if (!"".equals(FileUtil.read_file(CommonConst.NavBarIconFilePath))) {
+            try {
+                JSONObject NavBarIcon = new JSONObject(FileUtil.read_file(CommonConst.NavBarIconFilePath));
+                return NavBarIcon.getBoolean("NavBarView");
+            } catch (Exception e) {
+                Log.d(TAG, "Error : " + e);
+                return true;
+            }
+        } else {
+            FileUtil.write_file(CommonConst.NavBarIconFilePath, CommonConst.NavBarIconDefaultFlag);
+        }
+        return true;
+    }
+
+    @Override
+    public void readyCallback(){
+
+        Log.d(TAG, "readyCallback");
+        if(isNoInstall){
+            handler.sendEmptyMessageDelayed(4,3000);
+        }
+
+    }
+    @Override
+    public void connectCallback(int i){
+
+        Log.d(TAG, "connectCallback == "+i);
+
+    }
+    @Override
+    public void getTerminalInfoCallback(int i){
+
+        Log.d(TAG, "getTerminalInfoCallback == "+i);
+
+    }
+
+    @Override
+    public void downloadCallback(int i, DownloadInfo downloadInfo){
+
+        Log.d(TAG, "downloadCallback == "+i);
+        if( i == CommonConst.START){
+            if(downloadInfo.downloadSize>0&&!downloadInfo.fileName.equals("UpdateList")){
+                handler.sendEmptyMessageDelayed(3,2000);
+            }
+        }
+
+    }
+
+    @Override
+    public void diagnosticCallback(int i){
+
+        Log.d(TAG, "diagnosticCallback == "+i);
+
+    }
+
+    @Override
+    public void installCallback(int i, castles.ctms.module.commonbusiness.PackageInfo packageInfo) {
+
+        Log.d(TAG, "installCallback == "+i);
+        Log.d(TAG,packageInfo.fileName+"======"+packageInfo.type);
+        isNoInstall = false;
+        if( i == CommonConst.START){
+            if(type == 0 || type!= packageInfo.type){
+                type = packageInfo.type;
+                String update = GetUpdateTypeName(type);
+                if(!TextUtils.isEmpty(update) && !updateName.equals(update)){
+                    updateName = update;
+                    runOnUiThread(() -> {
+                        dialogView.appendMessage(updateName);
+                    });
+                }
+            }
+        }
+        if(i == CommonConst.INSTALL_COMPLETE){
+            isNoInstall = true;
+            handler.sendEmptyMessageDelayed(3,2000);
+        }
     }
 }

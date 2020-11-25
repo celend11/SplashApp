@@ -117,4 +117,10 @@ public class DialogView extends LinearLayout {
         return String.format("%02d:%02d:%02d",hourTime,minuteTime,secondTime);
     }
 
+    public void appendMessage(String msg){
+//        String msg1 = message.getText().toString();
+//        msg1 = msg1+"\n"+msg;
+        message.setText(msg);
+    }
+
 }

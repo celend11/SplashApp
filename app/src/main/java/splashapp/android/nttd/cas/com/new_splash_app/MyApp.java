@@ -3,6 +3,7 @@ package splashapp.android.nttd.cas.com.new_splash_app;
 import android.app.Application;
 import android.util.Log;
 
+import CTOS.CtCtms;
 import splashapp.android.nttd.cas.com.new_splash_app.logutil.CrashHandler;
 
 /**
@@ -12,11 +13,16 @@ import splashapp.android.nttd.cas.com.new_splash_app.logutil.CrashHandler;
  */
 public class MyApp extends Application {
     private static String TAG= MyApp.class.getSimpleName();
+    private static CtCtms initCtCtms;
     @Override
     public void onCreate() {
         Log.i(TAG, "onCreate");
         super.onCreate();
         CrashHandler crashHandler = CrashHandler.getInstance();
         crashHandler.init(getApplicationContext());
+        initCtCtms = new CtCtms(this);
+    }
+    public static CtCtms getCtCtms(){
+        return initCtCtms;
     }
 }
