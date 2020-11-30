@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">SplashApp</string>
     <string name="do_not_turn_off_the_terminal">Do not turn off the terminal.</string>
-    <string name="loading_data">Loading data...</string>
+    <string name="loading_data">Processing...</string>
 </resources>

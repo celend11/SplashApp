@@ -7,11 +7,18 @@ public class CommonConst {
 
     public static String ACTION_TYPE_KEY = "actionType";
     public static int SERVICE_ACTION_TYPE_START_POLLING_PROCESS = 0;
+    public static int SERVICE_ACTION_TYPE_START_INSTALL_PROCESS = 1;
+    public static int SERVICE_ACTION_TYPE_START_TAMPER_PROCESS = 2;
+    public static int SERVICE_ACTION_TYPE_START_SPLASH_PROCESS = 3;
 
     public final static int SUCCESS = 0x0000;
     public final static int DOING = 0x0001;
     public final static int INSTALL_COMPLETE = 0x0FFF;
     public final static int START = 0x1000;
+
+    public static final int ENABLE_CONFIG_CTMS_NOT_ENABLE_VALUE = 0;
+    public static final int ENABLE_CONFIG_CTMS_ENABLE_VALUE = 1;
+    public static final String TERMINAL_SN_EMPTY = "0000000000000000";
 
     public class FileType{
         public static final int FILE_TYPE_UPDATELIST = 0xFF;

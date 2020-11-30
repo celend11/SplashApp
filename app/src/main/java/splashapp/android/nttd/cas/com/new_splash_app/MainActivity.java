@@ -70,7 +70,6 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
 
     private int type = 0;
     private String updateName = "";
-    private boolean isNoInstall = true;
     private boolean isShowNavBarView = false;
 
     private String GetUpdateTypeName(int type){
@@ -104,24 +103,24 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
         return updateName;
     }
 
-    private BroadcastReceiver packageReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String packageName = intent.getDataString();
-            String action = intent.getAction();
-            if (Intent.ACTION_PACKAGE_ADDED.equals(action)) {
-                Log.e(TAG, "onReceive:added/ " + packageName);
-            } else if (Intent.ACTION_PACKAGE_REPLACED.equals(action)) {
-                Log.e(TAG, "onReceive:reinstall/ " + packageName);
-                if (agentPackageName.equals(packageName)) {
-                    Log.e(TAG, "start_DLA");
-                    handler.sendEmptyMessage(8);
-                }
-            } else if (Intent.ACTION_PACKAGE_REMOVED.equals(action)) {
-                Log.e(TAG, "onReceive:remove/ " + packageName);
-            }
-        }
-    };
+//    private BroadcastReceiver packageReceiver = new BroadcastReceiver() {
+//        @Override
+//        public void onReceive(Context context, Intent intent) {
+//            String packageName = intent.getDataString();
+//            String action = intent.getAction();
+//            if (Intent.ACTION_PACKAGE_ADDED.equals(action)) {
+//                Log.e(TAG, "onReceive:added/ " + packageName);
+//            } else if (Intent.ACTION_PACKAGE_REPLACED.equals(action)) {
+//                Log.e(TAG, "onReceive:reinstall/ " + packageName);
+//                if (agentPackageName.equals(packageName)) {
+//                    Log.e(TAG, "start_DLA");
+//                    handler.sendEmptyMessage(8);
+//                }
+//            } else if (Intent.ACTION_PACKAGE_REMOVED.equals(action)) {
+//                Log.e(TAG, "onReceive:remove/ " + packageName);
+//            }
+//        }
+//    };
 
 
     @SuppressLint("HandlerLeak")
@@ -142,16 +141,9 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
 //                    System.exit(0);
                     skipToLaunch();
                     break;
-                case 4:
-                    if(isNoInstall){
-                        handler.sendEmptyMessage(3);
-                    }
-                    break;
                 case 5:
                     //start callback
-                    if(ctCtms!=null){
-                        ctCtms.registerCallback(MainActivity.this);
-                    }
+
                     break;
                 case 6:
                     //timeout
@@ -166,14 +158,23 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
                     break;
                 case 8:
                     if (isAviliblePackageName(MainActivity.this, CommonConst.CTMS_AGENT_PACKAGE_NAME)) {
-                        handler.sendEmptyMessageDelayed(5,2000);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O){
+                            if(ctCtms!=null){
+                                ctCtms.registerCallback(MainActivity.this);
+                            }
+                            (MainActivity.this).startForegroundService(getStartCTMSInstallIntent());
+                        }else {
+                            (MainActivity.this).startService(getStartCTMSInstallIntent());
+                        }
+//                        checkCtms();
+                        handler.sendEmptyMessage(5);
                     } else {
 //                        Toast.makeText(MainActivity.this,"jp.co.nttdata.dlc.agent is not avilible.",Toast.LENGTH_LONG).show();
                         handler.sendEmptyMessage(3);
                     }
                     break;
                 case 9:
-                    registerPackageReceiver();
+//                    registerPackageReceiver();
                     break;
                 case 10:
                     try {
@@ -211,7 +212,7 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
         if(strDeivceModel.equals(SystemDefine.d_MODEL_S1E)){
             handler.sendEmptyMessage(11);
         }
-        handler.sendEmptyMessage(9);
+//        handler.sendEmptyMessage(9);
         handler.sendEmptyMessage(1);
         handler.sendEmptyMessageDelayed(6, timeout);
         handler.sendEmptyMessage(10);
@@ -226,8 +227,47 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
             }
         });
 
-        handler.sendEmptyMessage(8);
+        handler.sendEmptyMessageDelayed(8,4000);
+//        handler.sendEmptyMessage(8);
 
+    }
+
+    private void checkCtms(){
+        if(ctCtms.getCTMSStatus() != CommonConst.ENABLE_CONFIG_CTMS_ENABLE_VALUE){
+            Log.d(TAG,"CTMS_ENABLE == false");
+            handler.sendEmptyMessageDelayed(3,1000);
+            return;
+        }else{
+            Log.d(TAG,"CTMS_ENABLE == true");
+        }
+        String json = ctCtms.getAllConfig();
+        if(TextUtils.isEmpty(json)){
+            handler.sendEmptyMessageDelayed(3,1000);
+            return;
+        }else{
+            try {
+                JSONObject jsonObject = new JSONObject(json);
+                Log.d(TAG,"jsonObject == " +json);
+                String sn = jsonObject.getString("Serial_Number");
+                if(TextUtils.isEmpty(sn)){
+                    Log.d(TAG,"sn == null");
+                    handler.sendEmptyMessageDelayed(3,1000);
+                    return;
+                }else{
+                    if(sn.equals(CommonConst.TERMINAL_SN_EMPTY)){
+                        Log.d(TAG,"sn == " + CommonConst.TERMINAL_SN_EMPTY);
+                        handler.sendEmptyMessageDelayed(3,1000);
+                        return;
+                    }
+                }
+            }catch (Exception exception){
+                Log.d(TAG,exception.toString());
+                handler.sendEmptyMessageDelayed(3,1000);
+                return;
+            }
+
+
+        }
     }
 
     //get the navbar status send broadcast to hide navbar
@@ -239,14 +279,14 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
         sendBroadcast(intent);
     }
 
-    public void registerPackageReceiver() {
-        IntentFilter filter = new IntentFilter();
-        filter.addAction("android.intent.action.PACKAGE_ADDED");
-        filter.addAction("android.intent.action.PACKAGE_REPLACED");
-        filter.addAction("android.intent.action.PACKAGE_REMOVED");
-        filter.addDataScheme("package");
-        registerReceiver(packageReceiver, filter);
-    }
+//    public void registerPackageReceiver() {
+//        IntentFilter filter = new IntentFilter();
+//        filter.addAction("android.intent.action.PACKAGE_ADDED");
+//        filter.addAction("android.intent.action.PACKAGE_REPLACED");
+//        filter.addAction("android.intent.action.PACKAGE_REMOVED");
+//        filter.addDataScheme("package");
+//        registerReceiver(packageReceiver, filter);
+//    }
 
     public void randomTime() {
         if (SystemProperties.getBoolean("persist.ctos.sys.time.random", false)) {
@@ -315,24 +355,18 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
 //        startActivity(skip);
 //        System.exit(0);
         //                android.os.Process.killProcess(android.os.Process.myPid());
-        if(isShowNavBarView){    //if show navbar is true send broadcast to show
-            Intent navbarIntent = new Intent();
-            navbarIntent.setAction(CommonConst.SATRUN_SHOW_NAVIGATION_BAR);
-            sendBroadcast(navbarIntent);
-        }
-        try {
-            PackageManager packageManager = getPackageManager();
-            Intent intent = packageManager.getLaunchIntentForPackage(searchDefauleHome(MainActivity.this));
-            intent.putExtra("UpdateStatus", true);
-            startActivity(intent);
-        } catch (Exception e) {
-            e.printStackTrace();
-            Log.e(TAG, "skipToLaunch: " + e.getMessage());
-        } finally {
+        onDestroy();
+//        try {
+//            PackageManager packageManager = getPackageManager();
+//            Intent intent = packageManager.getLaunchIntentForPackage(searchDefauleHome(MainActivity.this));
+//            intent.putExtra("UpdateStatus", true);
+//            startActivity(intent);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//            Log.e(TAG, "skipToLaunch: " + e.getMessage());
+//        } finally {
             System.exit(0);
-        }
-
-
+//        }
     }
 
     private String searchDefauleHome(Context ctx) {
@@ -384,9 +418,9 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
             sendBroadcast(navbarIntent);
         }
         Log.e(TAG, "onDestroy");
-        if (packageReceiver != null) {
-            unregisterReceiver(packageReceiver);
-        }
+//        if (packageReceiver != null) {
+//            unregisterReceiver(packageReceiver);
+//        }
         if(ctCtms!=null){
             ctCtms.unregisterCallback(this);
         }
@@ -444,7 +478,7 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
         return pinfoSplash.versionName;
     }
 
-    public boolean getNavBarView() {
+    private boolean getNavBarView() {
         if (!"".equals(FileUtil.read_file(CommonConst.NavBarIconFilePath))) {
             try {
                 JSONObject NavBarIcon = new JSONObject(FileUtil.read_file(CommonConst.NavBarIconFilePath));
@@ -459,25 +493,34 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
         return true;
     }
 
+    private Intent getStartCTMSInstallIntent(){
+        Intent intent = new Intent();
+        intent.setClassName("castles.ctms.service", "castles.ctms.service.CtmsApiService");
+        intent.setData(Uri.parse("content://ctms_agent/alarm/splash"));
+        intent.setAction("castles.android.SPLASH");
+        intent.putExtra(CommonConst.ACTION_TYPE_KEY, CommonConst.SERVICE_ACTION_TYPE_START_SPLASH_PROCESS);
+        return intent;
+    }
+
     @Override
     public void readyCallback(){
 
         Log.d(TAG, "readyCallback");
-        if(isNoInstall){
-            handler.sendEmptyMessageDelayed(4,3000);
-        }
+        handler.sendEmptyMessage(3);
 
     }
     @Override
     public void connectCallback(int i){
 
         Log.d(TAG, "connectCallback == "+i);
+        handler.sendEmptyMessage(3);
 
     }
     @Override
     public void getTerminalInfoCallback(int i){
 
         Log.d(TAG, "getTerminalInfoCallback == "+i);
+        handler.sendEmptyMessage(3);
 
     }
 
@@ -485,11 +528,7 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
     public void downloadCallback(int i, DownloadInfo downloadInfo){
 
         Log.d(TAG, "downloadCallback == "+i);
-        if( i == CommonConst.START){
-            if(downloadInfo.downloadSize>0&&!downloadInfo.fileName.equals("UpdateList")){
-                handler.sendEmptyMessageDelayed(3,2000);
-            }
-        }
+        handler.sendEmptyMessage(3);
 
     }
 
@@ -497,6 +536,7 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
     public void diagnosticCallback(int i){
 
         Log.d(TAG, "diagnosticCallback == "+i);
+        handler.sendEmptyMessage(3);
 
     }
 
@@ -504,8 +544,7 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
     public void installCallback(int i, castles.ctms.module.commonbusiness.PackageInfo packageInfo) {
 
         Log.d(TAG, "installCallback == "+i);
-        Log.d(TAG,packageInfo.fileName+"======"+packageInfo.type);
-        isNoInstall = false;
+//        Log.d(TAG,packageInfo.fileName+"======"+packageInfo.type);
         if( i == CommonConst.START){
             if(type == 0 || type!= packageInfo.type){
                 type = packageInfo.type;
@@ -517,10 +556,13 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
                     });
                 }
             }
+        }else  if(i == CommonConst.INSTALL_COMPLETE){
+            handler.sendEmptyMessageDelayed(3,5000);
+        }else{
+            if(packageInfo == null){
+                handler.sendEmptyMessage(3);
+            }
         }
-        if(i == CommonConst.INSTALL_COMPLETE){
-            isNoInstall = true;
-            handler.sendEmptyMessageDelayed(3,2000);
-        }
+
     }
 }
