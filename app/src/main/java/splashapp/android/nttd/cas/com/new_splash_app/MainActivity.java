@@ -355,7 +355,7 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
 //        startActivity(skip);
 //        System.exit(0);
         //                android.os.Process.killProcess(android.os.Process.myPid());
-        onDestroy();
+        releaserRsources();
 //        try {
 //            PackageManager packageManager = getPackageManager();
 //            Intent intent = packageManager.getLaunchIntentForPackage(searchDefauleHome(MainActivity.this));
@@ -409,9 +409,7 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
         return false;
     }
 
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
+    private void releaserRsources(){
         if(isShowNavBarView){
             Intent navbarIntent = new Intent();
             navbarIntent.setAction(CommonConst.SATRUN_SHOW_NAVIGATION_BAR);
@@ -424,6 +422,36 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
         if(ctCtms!=null){
             ctCtms.unregisterCallback(this);
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        releaserRsources();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        Log.d(TAG,"onStart");
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Log.d(TAG,"onResume");
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        Log.d(TAG,"onPause");
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        Log.d(TAG,"onStop");
     }
 
     @Override
@@ -565,4 +593,34 @@ public class MainActivity extends AppCompatActivity implements IStatusCallback{
         }
 
     }
+    @Override
+    public void freeTypeDownloadCallback(int i, DownloadInfo downloadInfo) {
+        Log.d(TAG, "freeTypeDownloadCallback == "+i);
+        handler.sendEmptyMessage(3);
+    }
+
+    @Override
+    public void freeTypeInstallCallback(int i, castles.ctms.module.commonbusiness.PackageInfo packageInfo) {
+        Log.d(TAG, "freeTypeInstallCallback == "+i);
+//        Log.d(TAG,packageInfo.fileName+"======"+packageInfo.type);
+        if( i == CommonConst.START){
+            if(type == 0 || type!= packageInfo.type){
+                type = packageInfo.type;
+                String update = GetUpdateTypeName(type);
+                if(!TextUtils.isEmpty(update) && !updateName.equals(update)){
+                    updateName = update;
+                    runOnUiThread(() -> {
+                        dialogView.appendMessage(updateName);
+                    });
+                }
+            }
+        }else  if(i == CommonConst.INSTALL_COMPLETE){
+            handler.sendEmptyMessageDelayed(3,5000);
+        }else{
+            if(packageInfo == null){
+                handler.sendEmptyMessage(3);
+            }
+        }
+    }
+
 }
